@@ -1,10 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('redis');
+const { register, metricsMiddleware } = require('./metrics');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(metricsMiddleware);
 
 const REDIS_HOST = process.env.REDIS_HOST || 'redis';
 const CATALOGUE_URL = process.env.CATALOGUE_URL || 'http://catalogue:8002';
@@ -46,6 +48,11 @@ async function saveCart(userId, cart) {
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', service: 'cart' });
+});
+
+app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
 });
 
 // Get cart
