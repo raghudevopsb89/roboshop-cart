@@ -3,4 +3,7 @@ WORKDIR /app
 COPY package.json server.js metrics.js ./
 RUN npm install --production
 EXPOSE 8003
+ENV NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+ENV NEW_RELIC_LOG=stdout
+ENV NEW_RELIC_NO_CONFIG_FILE=true
 CMD ["node", "server.js"]
