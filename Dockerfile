@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:26-alpine
 WORKDIR /app
 COPY package.json server.js metrics.js ./
 RUN npm install --production
