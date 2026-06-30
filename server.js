@@ -41,14 +41,13 @@ function requestLogger(req, res, next) {
     req.reqId = reqId;
     res.setHeader('x-request-id', reqId);
     const start = process.hrtime.bigint();
-    log('info', 'req.start', { reqId, method: req.method, path: req.path, remote: req.ip });
 
     let settled = false;
     const finish = (event) => {
         if (settled) return;
         settled = true;
         const durMs = Number(process.hrtime.bigint() - start) / 1e6;
-        log('info', `req.${event}`, { reqId, method: req.method, path: req.path, status: res.statusCode, durMs: +durMs.toFixed(1) });
+        log('info', `req.${event}`, { reqId, method: req.method, path: req.path, status: res.statusCode, durMs: +durMs.toFixed(1), remote: req.ip });
     };
     res.on('finish', () => finish('finish'));
     res.on('close', () => finish(res.writableEnded ? 'finish' : 'close'));
@@ -65,24 +64,44 @@ const REDIS_HOST = process.env.REDIS_HOST || 'redis';
 const CATALOGUE_URL = process.env.CATALOGUE_URL || 'http://catalogue:8002';
 const PORT = process.env.PORT || 8003;
 const CART_TTL = 3600;
+const REDIS_POOL_SIZE = parseInt(process.env.REDIS_POOL_SIZE || '8', 10);
 
-let redisClient;
+const redisPool = [];
+let redisCursor = 0;
+
+function redis() {
+    const client = redisPool[redisCursor];
+    redisCursor = (redisCursor + 1) % redisPool.length;
+    return client;
+}
 
 async function connectRedis() {
-    redisClient = createClient({ url: `redis://${REDIS_HOST}:6379` });
-    redisClient.on('error', (err) => log('error', 'redis.error', { error: err.message }));
-
-    for (let i = 0; i < 30; i++) {
-        try {
-            await redisClient.connect();
-            log('info', 'redis.connected', { host: REDIS_HOST });
-            return;
-        } catch (err) {
-            log('warn', 'redis.connect.retry', { attempt: i + 1, error: err.message });
-            await new Promise(resolve => setTimeout(resolve, 2000));
+    const connectOne = async (i) => {
+        const c = createClient({ url: `redis://${REDIS_HOST}:6379` });
+        c.on('error', (err) => log('error', 'redis.error', { error: err.message, clientIndex: i }));
+        for (let retry = 0; retry < 30; retry++) {
+            try {
+                await c.connect();
+                return c;
+            } catch (err) {
+                log('warn', 'redis.connect.retry', { clientIndex: i, attempt: retry + 1, error: err.message });
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
         }
-    }
-    throw new Error('Failed to connect to Redis');
+        throw new Error(`Failed to connect Redis client ${i}`);
+    };
+
+    const clients = await Promise.all(
+        Array.from({ length: REDIS_POOL_SIZE }, (_, i) => connectOne(i))
+    );
+    redisPool.push(...clients);
+    log('info', 'redis.pool.connected', { host: REDIS_HOST, size: REDIS_POOL_SIZE });
+}
+
+async function closeRedisPool() {
+    await Promise.all(redisPool.map(c => c.quit().catch((err) => {
+        log('warn', 'redis.quit.failed', { error: err.message });
+    })));
 }
 
 function cartKey(userId) {
@@ -90,12 +109,12 @@ function cartKey(userId) {
 }
 
 async function getCart(userId) {
-    const data = await redisClient.get(cartKey(userId));
+    const data = await redis().get(cartKey(userId));
     return data ? JSON.parse(data) : { userId, items: [] };
 }
 
 async function saveCart(userId, cart) {
-    await redisClient.setEx(cartKey(userId), CART_TTL, JSON.stringify(cart));
+    await redis().setEx(cartKey(userId), CART_TTL, JSON.stringify(cart));
 }
 
 app.get('/health', (req, res) => {
@@ -197,7 +216,7 @@ app.delete('/cart/:userId/item/:productId', async (req, res) => {
 
 app.delete('/cart/:userId', async (req, res) => {
     try {
-        await redisClient.del(cartKey(req.params.userId));
+        await redis().del(cartKey(req.params.userId));
         log('info', 'cart.cleared', { reqId: req.reqId, userId: req.params.userId });
         res.json({ status: 'ok' });
     } catch (err) {
@@ -222,7 +241,8 @@ connectRedis().then(() => {
 function shutdown(signal) {
     log('warn', 'server.shutdown.start', { signal });
     if (!server) return process.exit(0);
-    server.close((err) => {
+    server.close(async (err) => {
+        await closeRedisPool();
         log(err ? 'error' : 'info', 'server.shutdown.done', { signal, error: err && err.message });
         process.exit(err ? 1 : 0);
     });
