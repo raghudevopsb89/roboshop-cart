@@ -28,5 +28,6 @@ jobs:
     needs: test
     runs-on: self-hosted
     steps:
+      - uses: actions/checkout@v7
       - run: make docker-push
 
