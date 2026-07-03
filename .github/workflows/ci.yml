@@ -12,7 +12,10 @@ jobs:
     needs: lint
     runs-on: self-hosted
     steps:
-      - run: make docker-build
+      - run: |
+          ls -l
+          pwd
+          make docker-build
 
   test:
     needs: build
