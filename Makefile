@@ -8,6 +8,8 @@ run:
 
 docker-build:
 	docker build -t raghudevopsb89.azurecr.io/roboshop-cart .
+
+docker-push:
 	docker push raghudevopsb89.azurecr.io/roboshop-cart
 
 clean:
