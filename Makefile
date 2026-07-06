@@ -7,6 +7,7 @@ run:
 	REDIS_HOST=localhost CATALOGUE_URL=http://localhost:8002 node server.js
 
 docker-build:
+	env
 	docker build -t raghudevopsb89.azurecr.io/roboshop-cart .
 
 docker-push:
