@@ -11,7 +11,7 @@ docker-build:
 	docker build -t raghudevopsb89.azurecr.io/roboshop-cart:${GITHUB_SHA} .
 
 docker-push:
-	docker push raghudevopsb89.azurecr.io/roboshop-cart${GITHUB_SHA}
+	docker push raghudevopsb89.azurecr.io/roboshop-cart:${GITHUB_SHA}
 
 clean:
 	rm -rf node_modules
