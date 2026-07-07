@@ -9,7 +9,7 @@ jobs:
       - run: echo "npx eslint ."
 
   test:
-    needs: build
+    needs: lint
     runs-on: self-hosted
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
