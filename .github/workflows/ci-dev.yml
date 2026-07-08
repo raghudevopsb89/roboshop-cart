@@ -2,10 +2,9 @@ name: Cart CI Pipeline
 run-name: Cart CI Pipeline
 
 on:
-  workflow_dispatch:
   push:
     branches:
-      - main
+      - '!main'
 
 jobs:
   lint:
@@ -19,9 +18,5 @@ jobs:
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
 
-  ci:
-    needs: test
-    uses: raghudevopsb89/github-actions/.github/workflows/ci.yml@main
-    with:
-      component_name: cart
+
 
