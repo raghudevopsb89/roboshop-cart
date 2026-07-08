@@ -1,5 +1,5 @@
-name: Cart CI Pipeline
-run-name: Cart CI Pipeline
+name: Cart Dev Pipeline
+run-name: Cart Dev Pipeline
 
 on:
   push:
