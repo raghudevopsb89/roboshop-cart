@@ -3,8 +3,8 @@ run-name: Cart Dev Pipeline
 
 on:
   push:
-    branches:
-      - '!main'
+    branches-ignore:
+      - 'main'
 
 jobs:
   lint:
