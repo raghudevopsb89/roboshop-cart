@@ -61,6 +61,7 @@ app.use(requestLogger);
 app.use(metricsMiddleware);
 
 const REDIS_HOST = process.env.REDIS_HOST || 'redis';
+const REDIS_PORT = process.env.REDIS_PORT || '6379';
 const CATALOGUE_URL = process.env.CATALOGUE_URL || 'http://catalogue:8002';
 const PORT = process.env.PORT || 8003;
 const CART_TTL = 3600;
@@ -77,7 +78,7 @@ function redis() {
 
 async function connectRedis() {
     const connectOne = async (i) => {
-        const c = createClient({ url: `redis://${REDIS_HOST}:6379` });
+        const c = createClient({ url: `redis://${REDIS_HOST}:${REDIS_PORT}` });
         c.on('error', (err) => log('error', 'redis.error', { error: err.message, clientIndex: i }));
         for (let retry = 0; retry < 30; retry++) {
             try {
@@ -227,16 +228,6 @@ app.delete('/cart/:userId', async (req, res) => {
 
 let server;
 const LISTEN_BACKLOG = parseInt(process.env.LISTEN_BACKLOG || '2048', 10);
-connectRedis().then(() => {
-    server = app.listen(PORT, LISTEN_BACKLOG, () => {
-        log('info', 'server.listen', { port: PORT, pid: process.pid, backlog: LISTEN_BACKLOG });
-    });
-    server.keepAliveTimeout = 65000;
-    server.headersTimeout = 70000;
-}).catch((err) => {
-    log('error', 'server.startup.failed', { error: err.message });
-    process.exit(1);
-});
 
 function shutdown(signal) {
     log('warn', 'server.shutdown.start', { signal });
@@ -251,9 +242,27 @@ function shutdown(signal) {
         process.exit(1);
     }, 25000).unref();
 }
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('uncaughtException', (err) => log('error', 'uncaughtException', { error: err.message, stack: err.stack }));
-process.on('unhandledRejection', (reason) => log('error', 'unhandledRejection', { reason: String(reason) }));
+
+// Only start the server / connect to infra when run directly (node server.js).
+// When required by tests, export the app and helpers so supertest can drive it.
+if (require.main === module) {
+    connectRedis().then(() => {
+        server = app.listen(PORT, LISTEN_BACKLOG, () => {
+            log('info', 'server.listen', { port: PORT, pid: process.pid, backlog: LISTEN_BACKLOG });
+        });
+        server.keepAliveTimeout = 65000;
+        server.headersTimeout = 70000;
+    }).catch((err) => {
+        log('error', 'server.startup.failed', { error: err.message });
+        process.exit(1);
+    });
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('uncaughtException', (err) => log('error', 'uncaughtException', { error: err.message, stack: err.stack }));
+    process.on('unhandledRejection', (reason) => log('error', 'unhandledRejection', { reason: String(reason) }));
+}
+
+module.exports = { app, connectRedis, closeRedisPool, getCart, saveCart, cartKey };
 
 //////
