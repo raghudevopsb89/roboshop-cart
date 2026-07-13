@@ -43,8 +43,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: make coverage
-      - run: make sonar-scan
+      - run: make build coverage sonar-scan
 
   ci:
     needs: [integration-test, sast, test ]
